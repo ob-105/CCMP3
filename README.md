@@ -47,7 +47,11 @@ Host this project in a GitHub repo (or any static host). The player reads from:
 - `<BASE_URL>/output/<song_name>/manifest.lua`
 - `<BASE_URL>/output/<song_name>/audio.dfpwm`
 
-Set your raw base URL in:
+Current repo raw base URL:
+
+- `https://raw.githubusercontent.com/ob-105/CCMP3/main`
+
+That URL is already set in:
 
 - `player.lua`
 - `install.lua`
@@ -57,7 +61,7 @@ Set your raw base URL in:
 On your CC computer:
 
 ```lua
-wget <your install.lua raw url> install.lua
+wget https://raw.githubusercontent.com/ob-105/CCMP3/main/install.lua install.lua
 lua install.lua
 ```
 
