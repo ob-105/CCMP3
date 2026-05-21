@@ -1,5 +1,5 @@
 -- CC:Tweaked MP3 Player with clickable UI and favorites
-local VERSION = "3"
+local VERSION = "4"
 
 local BASE_URL = "https://raw.githubusercontent.com/ob-105/CCMP3/main"
 local DEFAULT_SERVER_URL = "http://127.0.0.1:8765"
@@ -7,6 +7,8 @@ local FAVORITES_PATH = "mp3_favorites.lua"
 local PLAYLISTS_PATH = "mp3_playlists.lua"
 local SOURCE_URL_PATH = "mp3_source_url.txt"
 local SOURCE_MODE_PATH = "mp3_source_mode.txt"
+local SELF_PATH = "player.lua"
+local UPDATE_URL = BASE_URL .. "/player.lua"
 
 local function read_text_file(path)
     if not fs.exists(path) then return nil end
@@ -59,6 +61,35 @@ local function download(url, path)
     f.write(data)
     f.close()
     return true
+end
+
+local function self_update()
+    if not http or not http.get then return end
+
+    local ok, res = pcall(http.get, UPDATE_URL, nil, true)
+    if not ok or not res then return end
+
+    local data = res.readAll()
+    res.close()
+    if not data or data == "" then return end
+
+    local remote_ver = data:match('local VERSION%s*=%s*"(%d+)"')
+    local remote_num = tonumber(remote_ver or "")
+    local local_num = tonumber(VERSION) or 0
+    if not remote_num or remote_num <= local_num then return end
+
+    local f = fs.open(SELF_PATH, "w")
+    if not f then return end
+    f.write(data)
+    f.close()
+
+    term.setBackgroundColor(colors.black)
+    term.setTextColor(colors.white)
+    term.clear()
+    term.setCursorPos(1, 1)
+    print("Updated player to v" .. tostring(remote_num) .. ". Rebooting...")
+    os.sleep(0.4)
+    os.reboot()
 end
 
 local load_index_for_base
@@ -823,6 +854,8 @@ local function ui_worker(state)
 end
 
 local function main()
+    self_update()
+
     term.setBackgroundColor(colors.black)
     term.setTextColor(colors.white)
     term.clear()
