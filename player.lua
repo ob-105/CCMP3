@@ -500,23 +500,26 @@ local function main()
     term.clear()
     term.setCursorPos(1, 1)
 
-    local index = load_index()
-    if #index.audio == 0 then
-        print("No audio entries in output/index.lua")
-        print("Run convert_audio.py first and upload output/.")
-        return
-    end
-
-    local state = make_ui_state(index)
+    local state = make_ui_state({ audio = {} })
     local ok, msg = reload_index_for_state(state)
+
     if not ok then
-        state.message = "Startup source failed, using GitHub"
-        state.source_mode = "github"
-        save_source_mode("github")
-        reload_index_for_state(state)
+        local first_mode = state.source_mode
+        local fallback_mode = (first_mode == "github") and "server" or "github"
+
+        state.source_mode = fallback_mode
+        local ok2, msg2 = reload_index_for_state(state)
+        if ok2 then
+            save_source_mode(fallback_mode)
+            state.message = "Startup fallback to " .. fallback_mode .. " | " .. msg2
+        else
+            state.source_mode = first_mode
+            state.message = "No tracks found on selected source. Click GitHub/Server then Reload."
+        end
     else
         state.message = msg
     end
+
     parallel.waitForAny(
         function() ui_worker(state) end,
         function() audio_worker(state) end
