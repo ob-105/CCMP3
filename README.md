@@ -135,3 +135,17 @@ In the `Server` tab:
   - `q`: stop current song
   - `up`: volume up
   - `down`: volume down
+
+## Playlists and Search
+
+- Custom playlists are saved on the computer in `mp3_playlists.lua`.
+- In the player UI:
+  - Click `Playlists` to view playlist songs.
+  - Use `New` to create a playlist and `Del` to delete active playlist.
+  - Use `Prev`/`Next` to switch active playlist.
+  - Click `List` beside a song to add it to active playlist.
+  - In playlist view, click `Rem` beside a song to remove it.
+
+- Search:
+  - Click `Search` (or press `/`) to filter songs by name.
+  - Click `Clear` (or press `c`) to clear search.
