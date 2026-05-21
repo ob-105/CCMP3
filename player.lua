@@ -1,5 +1,5 @@
 -- CC:Tweaked MP3 Player with clickable UI and favorites
-local VERSION = "4"
+local VERSION = "5"
 
 local BASE_URL = "https://raw.githubusercontent.com/ob-105/CCMP3/main"
 local DEFAULT_SERVER_URL = "http://127.0.0.1:8765"
@@ -582,6 +582,7 @@ local function clear_search(state)
     state.search_query = ""
     state.scroll = 0
     state.message = "Search cleared"
+end
 
 local function audio_worker(state)
     local dfpwm = require("cc.audio.dfpwm")
