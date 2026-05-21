@@ -1,5 +1,5 @@
 -- CC:Tweaked MP3 Player with clickable UI and favorites
-local VERSION = "2"
+local VERSION = "3"
 
 local BASE_URL = "https://raw.githubusercontent.com/ob-105/CCMP3/main"
 local DEFAULT_SERVER_URL = "http://127.0.0.1:8765"
