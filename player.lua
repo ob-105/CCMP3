@@ -3,6 +3,19 @@ local VERSION = "2"
 
 local BASE_URL = "https://raw.githubusercontent.com/ob-105/CCMP3/main"
 local FAVORITES_PATH = "mp3_favorites.lua"
+local SOURCE_URL_PATH = "mp3_source_url.txt"
+
+local function load_source_url()
+    if not fs.exists(SOURCE_URL_PATH) then return BASE_URL end
+    local f = fs.open(SOURCE_URL_PATH, "r")
+    if not f then return BASE_URL end
+    local url = f.readAll()
+    f.close()
+    if not url then return BASE_URL end
+    url = url:gsub("%s+$", "")
+    if url == "" then return BASE_URL end
+    return url
+end
 
 local function download(url, path)
     local dir = path:match("^(.*)/[^/]+$")
@@ -18,10 +31,11 @@ local function download(url, path)
 end
 
 local function load_index()
+    local active_base = load_source_url()
     local path = "media/index.lua"
     if fs.exists(path) then fs.delete(path) end
 
-    local ok = download(BASE_URL .. "/output/index.lua", path)
+    local ok = download(active_base .. "/output/index.lua", path)
     if not ok then return { video = {}, audio = {} } end
 
     local fn = loadfile(path)
@@ -279,7 +293,8 @@ local function audio_worker(state)
             return
         end
 
-        local url = BASE_URL .. "/output/" .. name .. "/audio.dfpwm"
+        local active_base = load_source_url()
+        local url = active_base .. "/output/" .. name .. "/audio.dfpwm"
         local res = http.get(url, nil, true)
         if not res then
             state.message = "Failed to fetch: " .. name

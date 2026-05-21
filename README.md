@@ -15,6 +15,7 @@ It keeps the same overall workflow, but removes video conversion/playback so it 
 
 - Install Python 3.10+.
 - Install `ffmpeg` and ensure it is on `PATH`.
+- Install Flask for local hosting: `pip install flask`
 
 ## 2. Convert songs
 
@@ -70,6 +71,33 @@ Then run:
 ```lua
 lua player.lua
 ```
+
+## 5. Local server (faster than GitHub)
+
+Run the local HTTP server from this folder:
+
+`python server.py`
+
+Or expose it publicly via Cloudflare quick tunnel:
+
+`python server.py --tunnel`
+
+The player can use an override source URL saved on the CC computer in:
+
+- `mp3_source_url.txt`
+
+If this file exists, player uses that URL instead of GitHub.
+
+Examples for `mp3_source_url.txt`:
+
+- Local LAN server: `http://192.168.1.50:8765`
+- Cloudflare tunnel: `https://your-subdomain.trycloudflare.com`
+
+Quick in-game setup:
+
+1. `edit mp3_source_url.txt`
+2. Paste URL only (no trailing slash needed)
+3. Save and run `lua player.lua`
 
 ## Notes
 
