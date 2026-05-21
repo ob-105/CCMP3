@@ -309,8 +309,16 @@ local function audio_worker(state)
         return #current.speakers > 0
     end
 
+    local function stop_all_speakers()
+        for _, spk in ipairs(collect_speakers()) do
+            pcall(function() spk.stop() end)
+        end
+        os.queueEvent("speaker_audio_empty")
+    end
+
     local function stop_song(msg)
         if current.res then pcall(function() current.res.close() end) end
+        stop_all_speakers()
         current.name = nil
         current.res = nil
         current.decode = nil
