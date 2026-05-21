@@ -56,6 +56,37 @@ def _write_player_source_url(base_dir: Path, url: str) -> None:
     path.write_text(url.strip() + "\n", encoding="utf-8")
 
 
+def _write_player_source_mode(base_dir: Path, mode: str) -> None:
+    path = base_dir / "mp3_source_mode.txt"
+    path.write_text(mode.strip() + "\n", encoding="utf-8")
+
+
+def _git_push(base_dir: Path, message: str, log_fn) -> None:
+    repo = str(base_dir)
+
+    add = subprocess.run(["git", "-C", repo, "add", "-A"], capture_output=True, text=True)
+    if add.returncode != 0:
+        log_fn(f"[git] add failed: {add.stderr.strip() or add.stdout.strip()}")
+        return
+
+    commit = subprocess.run(["git", "-C", repo, "commit", "-m", message], capture_output=True, text=True)
+    commit_text = (commit.stdout or "") + "\n" + (commit.stderr or "")
+    if commit.returncode != 0:
+        if "nothing to commit" in commit_text.lower():
+            log_fn("[git] Nothing to commit.")
+            return
+        log_fn(f"[git] commit failed: {commit_text.strip()}")
+        return
+
+    log_fn("[git] Commit created.")
+    push = subprocess.run(["git", "-C", repo, "push", "origin", "main"], capture_output=True, text=True)
+    if push.returncode != 0:
+        log_fn(f"[git] push failed: {(push.stderr or push.stdout).strip()}")
+        return
+
+    log_fn("[git] Pushed to origin/main.")
+
+
 def _rebuild_index_from_output(output_dir: Path) -> list[str]:
     names: list[str] = []
     if not output_dir.exists():
@@ -72,14 +103,15 @@ def _rebuild_index_from_output(output_dir: Path) -> list[str]:
     return names
 
 
-def convert_all_audio(base_dir: Path, log_fn) -> None:
+def convert_all_audio(base_dir: Path, log_fn) -> list[str]:
     input_dir = base_dir / "input"
     output_dir = base_dir / "output"
+    converted_files: list[str] = []
 
     files = discover_inputs(input_dir)
     if not files:
         log_fn("No supported audio files found in input/.")
-        return
+        return converted_files
 
     log_fn(f"=== Converting {len(files)} file(s) ===")
     for src in files:
@@ -90,6 +122,7 @@ def convert_all_audio(base_dir: Path, log_fn) -> None:
 
         log_fn(f"Converting: {src.name}")
         duration = convert_audio_to_dfpwm(src, audio_out)
+        converted_files.append(src.name)
 
         manifest = {
             "name": name,
@@ -109,6 +142,7 @@ def convert_all_audio(base_dir: Path, log_fn) -> None:
     names = _rebuild_index_from_output(output_dir)
     log_fn(f"Index updated. Audio tracks: {len(names)}")
     log_fn("Done.")
+    return converted_files
 
 
 def _make_flask_app(base_dir: Path):
@@ -264,6 +298,15 @@ def launch_gui():
     ttk.Label(sf, text="Supported:", foreground="#555").grid(row=2, column=0, sticky="w")
     ttk.Label(sf, text=", ".join(sorted(SUPPORTED_EXTS)), foreground="#555").grid(row=2, column=1, sticky="w", padx=(6, 0))
 
+    push_var = tk.BooleanVar(value=False)
+    push_chk = ttk.Checkbutton(sf, text="Upload to GitHub after convert", variable=push_var)
+    push_chk.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+    ttk.Label(sf, text="Commit message:", foreground="#555").grid(row=4, column=0, sticky="w", pady=(4, 0))
+    commit_msg_var = tk.StringVar(value="CCMP3: convert audio")
+    commit_msg_entry = ttk.Entry(sf, textvariable=commit_msg_var, width=42)
+    commit_msg_entry.grid(row=4, column=1, sticky="w", padx=(6, 0), pady=(4, 0))
+
     lf = ttk.LabelFrame(tab_convert, text="Conversion Log", padding=10)
     lf.pack(fill="both", expand=True, padx=12, pady=6)
 
@@ -297,7 +340,16 @@ def launch_gui():
         sys.stdout = QueueWriter()
         try:
             os.chdir(base_dir)
-            convert_all_audio(base_dir, print)
+            converted_files = convert_all_audio(base_dir, print)
+            if push_var.get():
+                if converted_files:
+                    msg = commit_msg_var.get().strip()
+                    if msg == "":
+                        msg = "CCMP3: convert audio"
+                    print(f"[git] Upload enabled. Message: {msg}")
+                    _git_push(base_dir, msg, print)
+                else:
+                    print("[git] Upload skipped (no converted files).")
         except Exception as exc:
             print(f"Error: {exc}\n{traceback.format_exc()}")
         finally:
@@ -345,7 +397,9 @@ def launch_gui():
             server_log_fn("[server] No tunnel URL available yet.")
             return
         _write_player_source_url(base_dir, u)
+        _write_player_source_mode(base_dir, "server")
         server_log_fn(f"[server] Wrote mp3_source_url.txt -> {u}")
+        server_log_fn("[server] Wrote mp3_source_mode.txt -> server")
 
     use_tunnel_btn = ttk.Button(sf2, text="Use in Player", width=14, command=use_tunnel_url)
     use_tunnel_btn.grid(row=1, column=3, padx=(6, 0))
@@ -358,9 +412,17 @@ def launch_gui():
 
     def use_local_url():
         _write_player_source_url(base_dir, local_url)
+        _write_player_source_mode(base_dir, "server")
         server_log_fn(f"[server] Wrote mp3_source_url.txt -> {local_url}")
+        server_log_fn("[server] Wrote mp3_source_mode.txt -> server")
 
     ttk.Button(local_frame, text="Use Local", width=10, command=use_local_url).pack(side="left", padx=(8, 0))
+
+    def use_github_source():
+        _write_player_source_mode(base_dir, "github")
+        server_log_fn("[server] Wrote mp3_source_mode.txt -> github")
+
+    ttk.Button(local_frame, text="Use GitHub", width=10, command=use_github_source).pack(side="left", padx=(8, 0))
 
     ttk.Label(sf2, text="Server tab handles hosting and tunnel. No screen sharing included.",
               foreground="#555").grid(row=3, column=0, columnspan=4, sticky="w", pady=(8, 0))

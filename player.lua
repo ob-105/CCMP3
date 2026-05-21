@@ -2,19 +2,49 @@
 local VERSION = "2"
 
 local BASE_URL = "https://raw.githubusercontent.com/ob-105/CCMP3/main"
+local DEFAULT_SERVER_URL = "http://127.0.0.1:8765"
 local FAVORITES_PATH = "mp3_favorites.lua"
 local SOURCE_URL_PATH = "mp3_source_url.txt"
+local SOURCE_MODE_PATH = "mp3_source_mode.txt"
 
-local function load_source_url()
-    if not fs.exists(SOURCE_URL_PATH) then return BASE_URL end
-    local f = fs.open(SOURCE_URL_PATH, "r")
-    if not f then return BASE_URL end
-    local url = f.readAll()
+local function read_text_file(path)
+    if not fs.exists(path) then return nil end
+    local f = fs.open(path, "r")
+    if not f then return nil end
+    local txt = f.readAll()
     f.close()
-    if not url then return BASE_URL end
-    url = url:gsub("%s+$", "")
-    if url == "" then return BASE_URL end
-    return url
+    if not txt then return nil end
+    txt = txt:gsub("%s+$", "")
+    if txt == "" then return nil end
+    return txt
+end
+
+local function write_text_file(path, value)
+    local f = fs.open(path, "w")
+    if not f then return false end
+    f.write(value)
+    f.write("\n")
+    f.close()
+    return true
+end
+
+local function load_source_mode()
+    local mode = read_text_file(SOURCE_MODE_PATH)
+    if mode == "server" then return "server" end
+    return "github"
+end
+
+local function save_source_mode(mode)
+    return write_text_file(SOURCE_MODE_PATH, mode)
+end
+
+local function load_server_url()
+    return read_text_file(SOURCE_URL_PATH) or DEFAULT_SERVER_URL
+end
+
+local function active_base_for_mode(mode)
+    if mode == "server" then return load_server_url() end
+    return BASE_URL
 end
 
 local function download(url, path)
@@ -30,8 +60,14 @@ local function download(url, path)
     return true
 end
 
+local load_index_for_base
+
 local function load_index()
-    local active_base = load_source_url()
+    local active_base = active_base_for_mode(load_source_mode())
+    return load_index_for_base(active_base)
+end
+
+load_index_for_base = function(active_base)
     local path = "media/index.lua"
     if fs.exists(path) then fs.delete(path) end
 
@@ -47,6 +83,18 @@ local function load_index()
     result.video = result.video or {}
     result.audio = result.audio or {}
     return result
+end
+
+local function reload_index_for_state(state)
+    local active_base = active_base_for_mode(state.source_mode)
+    local idx = load_index_for_base(active_base)
+    if #idx.audio == 0 then
+        return false, "No audio entries from source"
+    end
+    state.songs = idx.audio
+    state.scroll = 0
+    state.active_base = active_base
+    return true, "Loaded " .. tostring(#idx.audio) .. " tracks"
 end
 
 local function load_favorites_map()
@@ -84,6 +132,8 @@ local function make_ui_state(index)
     return {
         songs = index.audio,
         view = "all",      -- all | favorites
+        source_mode = load_source_mode(),
+        active_base = BASE_URL,
         scroll = 0,
         favorites = load_favorites_map(),
         running = true,
@@ -159,8 +209,24 @@ local function draw_ui(state)
     put(2 + #all_label + 1, 2, fav_label, colors.black, fav_bg)
     add_zone(state, 2 + #all_label + 1, 2 + #all_label + #fav_label, 2, "tab", "favorites")
 
+    local src_git = "[GitHub]"
+    local src_srv = "[Server]"
+    local src_refresh = "[Reload]"
+    local src_x = math.max(2 + #all_label + #fav_label + 4, w - (#src_git + #src_srv + #src_refresh + 6))
+
+    put(src_x, 2, src_git, colors.black, state.source_mode == "github" and colors.lightBlue or colors.gray)
+    add_zone(state, src_x, src_x + #src_git - 1, 2, "source", "github")
+
+    local src_srv_x = src_x + #src_git + 1
+    put(src_srv_x, 2, src_srv, colors.black, state.source_mode == "server" and colors.lightBlue or colors.gray)
+    add_zone(state, src_srv_x, src_srv_x + #src_srv - 1, 2, "source", "server")
+
+    local src_ref_x = src_srv_x + #src_srv + 1
+    put(src_ref_x, 2, src_refresh, colors.black, colors.orange)
+    add_zone(state, src_ref_x, src_ref_x + #src_refresh - 1, 2, "reload", "reload")
+
     put(1, 3, string.rep(" ", w), colors.lightGray, colors.black)
-    put(2, 3, "Play | Fav | Mouse wheel scroll | Space pause | S stop | Q quit", colors.lightGray, colors.black)
+    put(2, 3, "Play | Fav | Source toggle | Mouse wheel scroll | Space pause | S stop | Q quit", colors.lightGray, colors.black)
 
     for i = 0, list_height - 1 do
         local y = list_start + i
@@ -194,9 +260,10 @@ local function draw_ui(state)
     end
 
     put(1, footer_y - 1, string.rep(" ", w), colors.black, colors.lightGray)
+    local source_tag = state.source_mode == "server" and "Server" or "GitHub"
     local status = state.now_playing and (state.paused and "Paused: " or "Playing: ") .. state.now_playing or "Idle"
     local voltxt = ("Vol %.1f"):format(state.volume)
-    local mid = " | " .. status .. " | " .. voltxt
+    local mid = " " .. source_tag .. " | " .. status .. " | " .. voltxt
     if #mid > w - 2 then mid = mid:sub(1, w - 2) end
     put(2, footer_y - 1, mid, colors.black, colors.lightGray)
 
@@ -293,7 +360,7 @@ local function audio_worker(state)
             return
         end
 
-        local active_base = load_source_url()
+        local active_base = active_base_for_mode(state.source_mode)
         local url = active_base .. "/output/" .. name .. "/audio.dfpwm"
         local res = http.get(url, nil, true)
         if not res then
@@ -355,6 +422,21 @@ local function ui_worker(state)
                     state.scroll = 0
                     state.message = zone.name == "all" and "Showing all songs" or "Showing favorites"
                     state.dirty = true
+                elseif zone.kind == "source" then
+                    state.source_mode = zone.name
+                    save_source_mode(zone.name)
+                    queue_command("stop")
+                    local ok, msg = reload_index_for_state(state)
+                    if ok then
+                        state.message = "Source: " .. (zone.name == "server" and "Server" or "GitHub") .. " | " .. msg
+                    else
+                        state.message = "Source error: " .. msg
+                    end
+                    state.dirty = true
+                elseif zone.kind == "reload" then
+                    local ok, msg = reload_index_for_state(state)
+                    state.message = ok and ("Reloaded | " .. msg) or ("Reload error: " .. msg)
+                    state.dirty = true
                 elseif zone.kind == "play" then
                     state.message = "Loading: " .. zone.name
                     state.dirty = true
@@ -399,6 +481,10 @@ local function ui_worker(state)
             elseif key == keys.pageDown then
                 state.scroll = state.scroll + 5
                 state.dirty = true
+            elseif key == keys.r then
+                local ok, msg = reload_index_for_state(state)
+                state.message = ok and ("Reloaded | " .. msg) or ("Reload error: " .. msg)
+                state.dirty = true
             end
         elseif ev == "term_resize" then
             state.dirty = true
@@ -422,6 +508,15 @@ local function main()
     end
 
     local state = make_ui_state(index)
+    local ok, msg = reload_index_for_state(state)
+    if not ok then
+        state.message = "Startup source failed, using GitHub"
+        state.source_mode = "github"
+        save_source_mode("github")
+        reload_index_for_state(state)
+    else
+        state.message = msg
+    end
     parallel.waitForAny(
         function() ui_worker(state) end,
         function() audio_worker(state) end

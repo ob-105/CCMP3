@@ -99,6 +99,34 @@ Quick in-game setup:
 2. Paste URL only (no trailing slash needed)
 3. Save and run `lua player.lua`
 
+## 6. Source selection in player UI
+
+Inside `player.lua` UI, you can click:
+
+- `GitHub`: stream from repository raw files
+- `Server`: stream from `mp3_source_url.txt`
+- `Reload`: refresh song list from current source
+
+The player remembers your choice in:
+
+- `mp3_source_mode.txt` (`github` or `server`)
+
+Keyboard shortcut:
+
+- `r`: reload track list from current source
+
+## 7. GitHub upload toggle in server.py
+
+In the `Convert` tab of `server.py`:
+
+- Enable `Upload to GitHub after convert` to auto `git add`, `git commit`, and `git push origin main`
+- Set a custom commit message in the field below it
+
+In the `Server` tab:
+
+- `Use Local` and `Use in Player` set mode to `server`
+- `Use GitHub` sets mode to `github`
+
 ## Notes
 
 - Works best with multiple speakers, but one speaker is enough.
